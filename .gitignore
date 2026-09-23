@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# SQLite databases (optional, but usually good to ignore big ones, we can keep the chinook.db and company.db if they are sample data)
+# We will explicitly allow data/*.db since they are sample databases for this project.
+
+# VS Code
+.vscode/
+
+# IDEs
+.idea/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/

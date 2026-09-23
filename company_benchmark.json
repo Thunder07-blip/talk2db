@@ -1,0 +1,7 @@
+[
+    {"question": "How many employees are there in total?"},
+    {"question": "What is the average salary of employees?"},
+    {"question": "Who is the highest paid employee?"},
+    {"question": "How many employees are in the Engineering department?"},
+    {"question": "List the names of all departments and the total salary paid in each."}
+]

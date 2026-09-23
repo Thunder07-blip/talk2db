@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talk2DB</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { primary: '#0f172a', secondary: '#f1f5f9', accent: '#3b82f6' }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const App = () => {
+            const [schema, setSchema] = useState(null);
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const messagesEndRef = useRef(null);
+
+            useEffect(() => {
+                fetch('/schema/full')
+                    .then(res => res.json())
+                    .then(data => setSchema(data))
+                    .catch(err => console.error("Failed to load schema:", err));
+            }, []);
+
+            useEffect(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                // Re-initialize icons for new elements
+                if (window.lucide) window.lucide.createIcons();
+            }, [messages]);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!input.trim() || isLoading) return;
+
+                const userMsg = { id: Date.now(), role: 'user', content: input };
+                setMessages(prev => [...prev, userMsg]);
+                setInput('');
+                setIsLoading(true);
+
+                try {
+                    const res = await fetch('/ask', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: userMsg.content })
+                    });
+                    const data = await res.json();
+                    
+                    setMessages(prev => [...prev, { 
+                        id: Date.now() + 1, 
+                        role: 'assistant', 
+                        data: data 
+                    }]);
+                } catch (err) {
+                    setMessages(prev => [...prev, { 
+                        id: Date.now() + 1, 
+                        role: 'assistant', 
+                        error: 'Failed to connect to the server.' 
+                    }]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="flex h-screen w-full bg-white text-gray-800 overflow-hidden">
+                    
+                    {/* Sidebar - Schema Viewer */}
+                    <div className="w-64 border-r border-gray-200 bg-secondary flex flex-col hidden md:flex">
+                        <div className="p-4 border-b border-gray-200 bg-white">
+                            <h1 className="text-xl font-bold flex items-center text-primary">
+                                <i data-lucide="database" className="mr-2 w-5 h-5 text-accent"></i>
+                                Talk2DB
+                            </h1>
+                        </div>
+                        <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
+                            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Database Schema</h2>
+                            {schema ? schema.tables.map(table => (
+                                <div key={table.name} className="mb-4">
+                                    <div className="font-medium text-sm text-primary flex items-center mb-1">
+                                        <i data-lucide="table" className="mr-1.5 w-3.5 h-3.5 text-gray-400"></i>
+                                        {table.name}
+                                    </div>
+                                    <div className="pl-5 space-y-1">
+                                        {table.columns.map(col => (
+                                            <div key={col.name} className="text-xs text-gray-500 flex justify-between">
+                                                <span>{col.name} {col.primary_key && <span className="text-accent ml-1">PK</span>}</span>
+                                                <span className="text-gray-400 text-[10px]">{col.data_type.split('(')[0]}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="text-sm text-gray-400 animate-pulse">Loading schema...</div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Main Chat Area */}
+                    <div className="flex-1 flex flex-col relative">
+                        {/* Header */}
+                        <div className="h-14 border-b border-gray-200 flex items-center px-6 bg-white shadow-sm z-10">
+                            <h2 className="font-semibold text-gray-700">Query Assistant</h2>
+                        </div>
+
+                        {/* Messages */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-[#f9fafb]">
+                            {messages.length === 0 && (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-4">
+                                    <i data-lucide="sparkles" className="w-12 h-12 text-gray-300"></i>
+                                    <p className="text-lg font-medium text-gray-500">Ask a question about your database</p>
+                                    <div className="flex gap-2 mt-4 text-sm">
+                                        <span className="bg-white px-3 py-1.5 rounded-full border shadow-sm cursor-pointer hover:bg-gray-50" onClick={() => setInput("Show me the top 5 customers by spending")}>Top 5 customers</span>
+                                        <span className="bg-white px-3 py-1.5 rounded-full border shadow-sm cursor-pointer hover:bg-gray-50" onClick={() => setInput("What are the most popular music genres?")}>Popular genres</span>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {messages.map((msg) => (
+                                <div key={msg.id} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                    <div className={`max-w-[85%] min-w-0 rounded-2xl px-5 py-4 ${
+                                        msg.role === 'user' 
+                                            ? 'bg-primary text-white shadow-md' 
+                                            : 'bg-white border border-gray-200 shadow-sm'
+                                    }`}>
+                                        {msg.role === 'user' ? (
+                                            <p className="text-sm">{msg.content}</p>
+                                        ) : (
+                                            <AssistantResponse msg={msg} />
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                            {isLoading && (
+                                <div className="flex justify-start">
+                                    <div className="bg-white border border-gray-200 shadow-sm rounded-2xl px-5 py-4 flex items-center space-x-2">
+                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                                    </div>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="p-4 bg-white border-t border-gray-200">
+                            <form onSubmit={handleSubmit} className="max-w-4xl mx-auto relative flex items-center">
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    placeholder="Ask anything about your data..."
+                                    className="w-full pl-5 pr-12 py-3.5 bg-gray-50 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-all shadow-inner text-sm"
+                                    disabled={isLoading}
+                                />
+                                <button 
+                                    type="submit" 
+                                    disabled={isLoading || !input.trim()}
+                                    className="absolute right-2 p-2 bg-primary text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <i data-lucide="send" className="w-4 h-4"></i>
+                                </button>
+                            </form>
+                            <div className="text-center mt-2 text-[10px] text-gray-400">
+                                Powered by Talk2DB & LLM Schema Linking
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AssistantResponse = ({ msg }) => {
+            if (msg.error) return <div className="text-red-500 text-sm flex items-center"><i data-lucide="alert-circle" className="w-4 h-4 mr-2"></i>{msg.error}</div>;
+            
+            const { data } = msg;
+            
+            if (!data.success) {
+                return (
+                    <div className="space-y-3">
+                        <div className="text-red-600 text-sm font-medium flex items-center">
+                            <i data-lucide="x-circle" className="w-4 h-4 mr-2"></i>
+                            Execution Failed
+                        </div>
+                        <div className="bg-red-50 p-3 rounded-md text-xs text-red-800 font-mono overflow-x-auto">
+                            {data.error}
+                        </div>
+                        {data.generated_sql && (
+                            <div>
+                                <div className="text-xs text-gray-500 mb-1">Attempted SQL:</div>
+                                <code className="block bg-gray-50 p-2 rounded text-xs text-gray-700 font-mono">{data.generated_sql}</code>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-4 w-full min-w-0 overflow-hidden">
+                    {/* Stats & Meta */}
+                    <div className="flex items-center text-xs text-gray-500 space-x-4 border-b border-gray-100 pb-2">
+                        <span className="flex items-center" title="Execution Time"><i data-lucide="clock" className="w-3 h-3 mr-1"></i> {data.total_time_ms}ms</span>
+                        <span className="flex items-center" title="Rows Returned"><i data-lucide="list" className="w-3 h-3 mr-1"></i> {data.query_result?.row_count || 0} rows</span>
+                        {data.retries > 0 && <span className="flex items-center text-orange-500"><i data-lucide="refresh-cw" className="w-3 h-3 mr-1"></i> {data.retries} retries</span>}
+                    </div>
+                    
+                    {/* SQL Query */}
+                    <div>
+                        <div className="text-[10px] uppercase font-semibold text-gray-400 tracking-wider mb-1">Generated SQL</div>
+                        <div className="bg-[#1e1e1e] text-[#d4d4d4] p-3 rounded-lg text-xs font-mono overflow-x-auto">
+                            <pre>{data.generated_sql}</pre>
+                        </div>
+                    </div>
+
+                    {/* Summary */}
+                    {data.summary && (
+                        <div>
+                            <div className="text-[10px] uppercase font-semibold text-gray-400 tracking-wider mb-1">Answer Summary</div>
+                            <div className="text-sm text-gray-700 bg-blue-50 border border-blue-100 p-4 rounded-lg leading-relaxed shadow-sm">
+                                {data.summary}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Results Table */}
+                    {data.query_result && data.query_result.rows && data.query_result.rows.length > 0 ? (
+                        <div className="w-full">
+                            <div className="text-[10px] uppercase font-semibold text-gray-400 tracking-wider mb-1">Results</div>
+                            <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm max-h-80 custom-scrollbar w-full">
+                                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead className="bg-gray-50 sticky top-0">
+                                        <tr>
+                                            {data.query_result.columns.map((col, i) => (
+                                                <th key={i} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                                                    {col}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {data.query_result.rows.map((row, i) => (
+                                            <tr key={i} className="hover:bg-gray-50">
+                                                {data.query_result.columns.map((col, j) => (
+                                                    <td key={j} className="px-4 py-2 whitespace-nowrap text-gray-700">
+                                                        {row[col] !== null ? String(row[col]) : <span className="text-gray-400 italic">null</span>}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {data.query_result.truncated && (
+                                <div className="mt-2 text-xs text-amber-600 flex items-center">
+                                    <i data-lucide="info" className="w-3 h-3 mr-1"></i>
+                                    Results truncated to 100 rows
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500 italic bg-gray-50 p-3 rounded-lg text-center border border-dashed border-gray-200">
+                            Query executed successfully but returned no results.
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
