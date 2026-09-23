@@ -73,6 +73,150 @@ Open your web browser and navigate to:
 
 ---
 
+## 🗃️ Using Talk2DB with Your Own Database
+
+Talk2DB is fully plug-and-play — it reads your database schema automatically at startup and needs zero code changes. Follow these steps to connect it to any database you own.
+
+### Step 1 — Prepare Your Database File
+
+Talk2DB works with **SQLite** databases (`.db` or `.sqlite` files). If your data is in a different format, first convert it:
+
+<details>
+<summary>📄 Converting from CSV files</summary>
+
+```bash
+# Install the sqlite-utils tool
+pip install sqlite-utils
+
+# Load your CSV into a new SQLite database
+# This will create a table named 'sales' from sales_data.csv
+sqlite-utils insert my_database.db sales sales_data.csv --csv
+```
+
+You can run this for each CSV file you have — each file becomes a separate table.
+</details>
+
+<details>
+<summary>🐘 Converting from PostgreSQL / MySQL</summary>
+
+Use [pgloader](https://pgloader.io/) for PostgreSQL, or [mysql2sqlite](https://github.com/dumblob/mysql2sqlite) for MySQL to export a `.db` file first.
+
+```bash
+# Example: export from PostgreSQL using pgloader
+pgloader postgresql://user:pass@localhost/mydb sqlite:///my_database.db
+```
+</details>
+
+<details>
+<summary>📊 Converting from Excel / Google Sheets</summary>
+
+Export your spreadsheet as a `.csv` file (File → Download → CSV), then follow the CSV steps above.
+</details>
+
+---
+
+### Step 2 — Place Your Database in the Project
+
+Copy your `.db` file into the `data/` folder of the Talk2DB project:
+
+```
+talk2db/
+└── data/
+    ├── chinook.db      ← (included sample)
+    ├── company.db      ← (included sample)
+    └── your_database.db  ← YOUR FILE GOES HERE
+```
+
+---
+
+### Step 3 — Update Your `.env` File
+
+Open the `.env` file in the project root and change the `TALK2DB_DB_PATH` to point to your database:
+
+```env
+# .env
+groq_api_1=your_groq_api_key_here
+TALK2DB_DB_PATH=data/your_database.db
+```
+
+> **Tip:** You can also use an absolute path if your database is stored elsewhere:
+> ```env
+> TALK2DB_DB_PATH=/home/yourname/projects/mydata.db
+> ```
+
+---
+
+### Step 4 — Restart the Server
+
+Stop the currently running server (press `CTRL+C`) and start it again:
+
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Talk2DB will automatically:
+- Detect your new database on startup
+- Read all its tables, columns, data types, primary keys, and foreign keys
+- Update the sidebar schema explorer in the UI with your new tables
+- Route all AI queries using your new schema
+
+---
+
+### Step 5 — Open the UI and Start Asking Questions
+
+Navigate to **http://127.0.0.1:8000** in your browser.
+
+The left sidebar will now show **your** database's tables and columns. Start typing questions in plain English!
+
+**Examples of the kinds of questions you can ask:**
+- *"How many records are in the orders table?"*
+- *"What is the average sale price grouped by category?"*
+- *"Show me the top 10 customers by total revenue."*
+- *"Find all products that have never been ordered."*
+- *"Which region had the highest growth between January and March?"*
+
+---
+
+### (Optional) Step 6 — Create a Benchmark File
+
+To test Talk2DB's accuracy against your database, create a `.json` file with a list of questions you know the answers to:
+
+```json
+[
+  { "question": "How many total customers are there?" },
+  { "question": "What is the most popular product category?" },
+  { "question": "List the top 5 salespeople by total revenue." },
+  { "question": "Which customers have placed more than 10 orders?" }
+]
+```
+
+Save it as `my_benchmark.json` in the project root, then run:
+
+```bash
+python benchmark.py
+```
+
+> **Note:** You'll need to update the last few lines of `benchmark.py` to point to your new database and benchmark file if you want to run them directly. Or just call `run_benchmark()` from a Python script:
+> ```python
+> from pathlib import Path
+> from benchmark import run_benchmark
+> run_benchmark(Path("data/your_database.db"), Path("my_benchmark.json"))
+> ```
+
+---
+
+### ⚠️ Important Notes
+
+| Requirement | Detail |
+|---|---|
+| **Database type** | Must be a SQLite `.db` or `.sqlite` file |
+| **Read-only safety** | Talk2DB **cannot** modify your data. The database is opened in read-only mode at the driver level, plus an AST security layer validates every query before execution. |
+| **Table naming** | SQLite table names are case-sensitive in some contexts. Talk2DB reads the exact names from the database, so the AI will use them correctly. |
+| **Large databases** | Talk2DB's Schema Linking feature handles databases with 100+ tables by routing each question to only the relevant subset of tables. |
+| **No data is sent to third parties** | Only the **schema structure** (table and column names) and the **user's question** are sent to the Groq AI API. The actual row data in your database stays on your machine. |
+
+---
+
 ## 🧪 Running Benchmarks
 
 Talk2DB includes a built-in benchmarking tool to test the AI's accuracy against any database.
@@ -98,3 +242,4 @@ This script will load a list of complex questions from a JSON file, run them thr
 
 ## 🛡️ License
 MIT License
+
